@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,11 +30,14 @@ var (
 	testMode        bool
 	stdinMode       bool
 	exitOnErrorMode bool
+	filenameRegex   string
 	verboseMode     bool
 	versionMode     bool
 	umask           string
 	scriptArgs      []string
 	stdinCopy       *os.File
+
+	regex *regexp.Regexp
 )
 
 func init() {
@@ -48,6 +52,7 @@ func init() {
 	flag.StringSliceVarP(&scriptArgs, "arg", "a", []string{}, "pass ARGUMENT to scripts, use once for each argument.")
 	flag.BoolVarP(&helpMode, "help", "h", false, "display this help and exit.")
 	flag.StringVarP(&umask, "umask", "u", defaultUmask, "sets umask to UMASK (octal), default is 022.")
+	flag.StringVar(&filenameRegex, "regex", "", "validate filenames based on POSIX ERE pattern PATTERN.")
 	flag.Usage = usage
 	flag.ErrHelp = nil
 }
@@ -76,6 +81,14 @@ func main() {
 		log.Fatal("-list and -test can not be used together")
 	}
 
+	if filenameRegex != "" {
+		var err error
+		regex, err = regexp.Compile(filenameRegex)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	dirname := flag.Arg(0)
 	filenames, err := listDirectory(dirname, reverseMode)
 	if err != nil {
@@ -86,7 +99,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := runParts(dirname, filenames, scriptArgs, testMode, listMode, verboseMode, exitOnErrorMode, stdinMode); err != nil {
+	if err := runParts(dirname, filenames, scriptArgs, isValidName(regex), testMode, listMode, verboseMode, exitOnErrorMode, stdinMode); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -121,7 +134,7 @@ func listDirectory(dirname string, reverseOrder bool) ([]string, error) {
 	return filenames, nil
 }
 
-func runParts(dirname string, filenames []string, scriptArgs []string, testMode, listMode, verboseMode, exitOnErrorMode, stdinMode bool) error {
+func runParts(dirname string, filenames []string, scriptArgs []string, isValidNameFunc func(string) bool, testMode, listMode, verboseMode, exitOnErrorMode, stdinMode bool) error {
 	if len(filenames) == 0 {
 		return nil
 	}
@@ -138,6 +151,9 @@ func runParts(dirname string, filenames []string, scriptArgs []string, testMode,
 	}
 
 	for _, fname := range filenames {
+		if !isValidNameFunc(fname) {
+			continue
+		}
 		filename := filepath.Join(dirname, fname)
 		fileinfo, err := os.Stat(filename)
 		if err != nil {
@@ -242,6 +258,15 @@ func runPart(filename string, input io.Reader, args []string) error {
 	fmt.Fprintf(os.Stdout, "%s", outSlurp)
 
 	return cmd.Wait()
+}
+
+func isValidName(r *regexp.Regexp) func(name string) bool {
+	return func(name string) bool {
+		if r == nil {
+			return true
+		}
+		return r.MatchString(name)
+	}
 }
 
 func formatExitError(filename string, err error) error {
