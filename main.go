@@ -1,0 +1,278 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"syscall"
+
+	flag "github.com/spf13/pflag"
+
+	"golang.org/x/sys/unix"
+)
+
+const defaultUmask = "022"
+
+var (
+	helpMode        bool
+	reportMode      bool
+	reverseMode     bool
+	listMode        bool
+	testMode        bool
+	stdinMode       bool
+	exitOnErrorMode bool
+	verboseMode     bool
+	versionMode     bool
+	umask           string
+	scriptArgs      []string
+	stdinCopy       *os.File
+)
+
+func init() {
+	flag.BoolVar(&listMode, "list", false, "print names of all valid files (can not be used with -test)")
+	flag.BoolVar(&testMode, "test", false, "print script names which would run, but don't run them.")
+	flag.BoolVar(&reportMode, "report", false, "print script names if they produce output.")
+	flag.BoolVar(&reverseMode, "reverse", false, "reverse the scripts' execution order.")
+	flag.BoolVar(&stdinMode, "stdin", false, "multiplex stdin to scripts being run, using temporary file.")
+	flag.BoolVar(&exitOnErrorMode, "exit-on-error", false, "exit as soon as a script returns with a non-zero exit code.")
+	flag.BoolVarP(&verboseMode, "verbose", "v", false, "print script names before running them.")
+	flag.BoolVarP(&versionMode, "version", "V", false, "output version information and exit.")
+	flag.StringSliceVarP(&scriptArgs, "arg", "a", []string{}, "pass ARGUMENT to scripts, use once for each argument.")
+	flag.BoolVarP(&helpMode, "help", "h", false, "display this help and exit.")
+	flag.StringVarP(&umask, "umask", "u", defaultUmask, "sets umask to UMASK (octal), default is 022.")
+	flag.Usage = usage
+	flag.ErrHelp = nil
+}
+
+func main() {
+	log.SetFlags(0)
+	log.SetPrefix("runparts: ")
+	log.SetOutput(os.Stderr)
+	flag.Parse()
+
+	if helpMode {
+		usage()
+		return
+	}
+
+	if versionMode {
+		version()
+		return
+	}
+
+	if flag.NArg() != 1 {
+		log.Fatal("missing operand")
+	}
+
+	if listMode && testMode {
+		log.Fatal("-list and -test can not be used together")
+	}
+
+	dirname := flag.Arg(0)
+	filenames, err := listDirectory(dirname, reverseMode)
+	if err != nil {
+		log.Fatalf("failed to open directory %s: %v", dirname, err)
+	}
+
+	if err := setUmask(umask); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := runParts(dirname, filenames, scriptArgs, testMode, listMode, verboseMode, exitOnErrorMode, stdinMode); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func usage() {
+	fmt.Fprintln(os.Stderr, "Usage: run-parts [OPTION]... DIRECTORY")
+	flag.PrintDefaults()
+}
+
+func version() {
+	fmt.Fprintln(os.Stderr, "alessio's runparts program, version 1.0.0")
+	fmt.Fprintln(os.Stderr, "Copyright (C) 2020 Alessio Treglia <alessio@debian.org>")
+}
+
+func listDirectory(dirname string, reverseOrder bool) ([]string, error) {
+	f, err := os.Open(dirname)
+	if err != nil {
+		return nil, err
+	}
+
+	filenames, err := f.Readdirnames(0)
+	if err != nil {
+		return nil, err
+	}
+
+	if reverseOrder {
+		sort.Sort(sort.Reverse(sort.StringSlice(filenames)))
+	} else {
+		sort.Sort(sort.StringSlice(filenames))
+	}
+
+	return filenames, nil
+}
+
+func runParts(dirname string, filenames []string, scriptArgs []string, testMode, listMode, verboseMode, exitOnErrorMode, stdinMode bool) error {
+	if len(filenames) == 0 {
+		return nil
+	}
+
+	var err error
+	if stdinMode {
+		stdinCopy, err = copyStdin()
+		if stdinCopy != nil {
+			defer os.Remove(stdinCopy.Name())
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, fname := range filenames {
+		filename := filepath.Join(dirname, fname)
+		fileinfo, err := os.Stat(filename)
+		if err != nil {
+			err2 := fmt.Errorf("failed to stat component %s: %v", filename, err)
+			if exitOnErrorMode {
+				return err2
+			}
+			log.Print(err2.Error())
+		}
+
+		mode := fileinfo.Mode()
+		if mode.IsDir() {
+			continue
+		}
+		if !mode.IsRegular() {
+			log.Printf("component %s is not an executable plain file", filename)
+			continue
+		}
+
+		if err := unix.Access(filename, unix.X_OK); err == nil {
+			switch {
+			case testMode:
+				fmt.Println(filename)
+			case listMode:
+				if err := unix.Access(filename, unix.R_OK); err == nil {
+					fmt.Println(filename)
+				}
+			default:
+				if verboseMode {
+					if len(scriptArgs) == 0 {
+						log.Printf("executing %s", filename)
+					} else {
+						log.Printf("executing %s %s", filename, strings.Join(scriptArgs, " "))
+					}
+				}
+
+				var err error
+				if stdinMode {
+					stdinCopy.Seek(0, 0)
+					err = runPart(filename, stdinCopy, scriptArgs)
+				} else {
+					err = runPart(filename, os.Stdin, scriptArgs)
+				}
+				if err != nil && exitOnErrorMode {
+					return formatExitError(filename, err)
+				}
+				if err != nil {
+					log.Println(formatExitError(filename, err))
+				}
+			}
+			continue
+		} else if err := unix.Access(filename, unix.R_OK); err == nil && listMode {
+			fmt.Println(filename)
+		}
+
+		if err := unix.Access(filename, unix.R_OK); err != nil && listMode {
+			fmt.Println(filename)
+		} else if mode&os.ModeSymlink != 0 && !listMode {
+			return fmt.Errorf("component %s is a broken symbolic link", filename)
+		}
+
+		continue
+
+	}
+
+	return nil
+}
+
+func runPart(filename string, input io.Reader, args []string) error {
+	cmd := exec.Command(filename, args...)
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	cmd.Stdin = input
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	errSlurp, err := ioutil.ReadAll(stderr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	outSlurp, err := ioutil.ReadAll(stdout)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if reportMode && (len(errSlurp) != 0 || len(outSlurp) != 0) {
+		fmt.Printf("%s:\n", filename)
+	}
+
+	fmt.Fprintf(os.Stderr, "%s", errSlurp)
+	fmt.Fprintf(os.Stdout, "%s", outSlurp)
+
+	return cmd.Wait()
+}
+
+func formatExitError(filename string, err error) error {
+	var eerr *exec.ExitError
+	if errors.As(err, &eerr) {
+		return fmt.Errorf("%s exited with return code %d", filename, eerr.ExitCode())
+	}
+	return fmt.Errorf("failed to exec %s: %s", filename, err.Error())
+}
+
+func setUmask(s string) error {
+	mask, err := strconv.ParseUint(s, 8, 16)
+	if err != nil {
+		return err
+	}
+
+	if mask > 07777 {
+		return errors.New("bad umask value")
+	}
+
+	_ = syscall.Umask(int(mask))
+	return nil
+}
+
+func copyStdin() (*os.File, error) {
+	tempfile, err := ioutil.TempFile("", "")
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create temporary file: %v", err)
+	}
+	if _, err := io.Copy(stdinCopy, os.Stdin); err != nil {
+		return tempfile, fmt.Errorf("couldn't copy stdin: %v", err)
+	}
+	return tempfile, nil
+}

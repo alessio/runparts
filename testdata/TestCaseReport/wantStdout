@@ -1,0 +1,6 @@
+testdata/TestCaseReport/scripts/01-script:
+01-script: STDOUT
+testdata/TestCaseReport/scripts/02-script:
+02-script: STDOUT
+testdata/TestCaseReport/scripts/04-script:
+04-script: STDOUT
