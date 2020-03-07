@@ -23,21 +23,22 @@ import (
 const defaultUmask = "022"
 
 var (
-	helpMode        bool
-	reportMode      bool
-	reverseMode     bool
-	listMode        bool
-	testMode        bool
-	stdinMode       bool
 	exitOnErrorMode bool
 	filenameRegex   string
+	helpMode        bool
+	listMode        bool
+	lsbsysinitMode  bool
+	reportMode      bool
+	reverseMode     bool
+	stdinMode       bool
+	testMode        bool
+	umask           string
 	verboseMode     bool
 	versionMode     bool
-	umask           string
-	scriptArgs      []string
-	stdinCopy       *os.File
 
-	regex *regexp.Regexp
+	regexes    []*regexp.Regexp
+	scriptArgs []string
+	stdinCopy  *os.File
 )
 
 func init() {
@@ -53,6 +54,7 @@ func init() {
 	flag.BoolVarP(&helpMode, "help", "h", false, "display this help and exit.")
 	flag.StringVarP(&umask, "umask", "u", defaultUmask, "sets umask to UMASK (octal), default is 022.")
 	flag.StringVar(&filenameRegex, "regex", "", "validate filenames based on POSIX ERE pattern PATTERN.")
+	flag.BoolVar(&lsbsysinitMode, "lsbsysinit", false, "validate filenames based on LSB sysinit specs.")
 	flag.Usage = usage
 	flag.ErrHelp = nil
 }
@@ -73,33 +75,15 @@ func main() {
 		return
 	}
 
-	if flag.NArg() != 1 {
-		log.Fatal("missing operand")
-	}
-
-	if listMode && testMode {
-		log.Fatal("-list and -test can not be used together")
-	}
-
-	if filenameRegex != "" {
-		var err error
-		regex, err = regexp.Compile(filenameRegex)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
+	validateArgs()
 	dirname := flag.Arg(0)
 	filenames, err := listDirectory(dirname, reverseMode)
 	if err != nil {
 		log.Fatalf("failed to open directory %s: %v", dirname, err)
 	}
 
-	if err := setUmask(umask); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := runParts(dirname, filenames, scriptArgs, isValidName(regex), testMode, listMode, verboseMode, exitOnErrorMode, stdinMode); err != nil {
+	setUmask(umask)
+	if err := runParts(dirname, filenames, scriptArgs, isValidName(regexes), testMode, listMode, verboseMode, exitOnErrorMode, stdinMode); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -112,6 +96,33 @@ func usage() {
 func version() {
 	fmt.Fprintln(os.Stderr, "alessio's runparts program, version 1.0.0")
 	fmt.Fprintln(os.Stderr, "Copyright (C) 2020 Alessio Treglia <alessio@debian.org>")
+}
+
+func validateArgs() {
+	if flag.NArg() != 1 {
+		log.Fatal("missing operand")
+	}
+
+	if listMode && testMode {
+		log.Fatal("-list and -test can not be used together")
+	}
+
+	switch {
+	case filenameRegex != "":
+		regex, err := regexp.Compile(filenameRegex)
+		if err != nil {
+			log.Fatal("failed to compile regular expression: %v", err)
+		}
+		regexes = []*regexp.Regexp{regex}
+	case lsbsysinitMode:
+		regexes = []*regexp.Regexp{
+			regexp.MustCompile("^_?([a-z0-9_.]+-)+[a-z0-9]+$"),
+			regexp.MustCompile("^[a-z0-9-].*\\.dpkg-(old|dist|new|tmp)$"),
+			regexp.MustCompile("^[a-z0-9][a-z0-9-]*$"),
+		}
+	default:
+		regexes = []*regexp.Regexp{regexp.MustCompile("^[a-zA-Z0-9_-]+$")}
+	}
 }
 
 func listDirectory(dirname string, reverseOrder bool) ([]string, error) {
@@ -134,7 +145,22 @@ func listDirectory(dirname string, reverseOrder bool) ([]string, error) {
 	return filenames, nil
 }
 
-func runParts(dirname string, filenames []string, scriptArgs []string, isValidNameFunc func(string) bool, testMode, listMode, verboseMode, exitOnErrorMode, stdinMode bool) error {
+func setUmask(s string) {
+	mask, err := strconv.ParseUint(s, 8, 16)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if mask > 07777 {
+		log.Fatal("bad umask value")
+	}
+
+	_ = syscall.Umask(int(mask))
+}
+
+func runParts(dirname string, filenames []string, scriptArgs []string,
+	isValidNameFunc func(string) bool,
+	testMode, listMode, verboseMode, exitOnErrorMode, stdinMode bool) error {
+
 	if len(filenames) == 0 {
 		return nil
 	}
@@ -260,12 +286,17 @@ func runPart(filename string, input io.Reader, args []string) error {
 	return cmd.Wait()
 }
 
-func isValidName(r *regexp.Regexp) func(name string) bool {
+func isValidName(exprs []*regexp.Regexp) func(name string) bool {
 	return func(name string) bool {
-		if r == nil {
+		if len(exprs) == 0 {
 			return true
 		}
-		return r.MatchString(name)
+		for _, r := range exprs {
+			if r.MatchString(name) {
+				return true
+			}
+		}
+		return false
 	}
 }
 
@@ -275,20 +306,6 @@ func formatExitError(filename string, err error) error {
 		return fmt.Errorf("%s exited with return code %d", filename, eerr.ExitCode())
 	}
 	return fmt.Errorf("failed to exec %s: %s", filename, err.Error())
-}
-
-func setUmask(s string) error {
-	mask, err := strconv.ParseUint(s, 8, 16)
-	if err != nil {
-		return err
-	}
-
-	if mask > 07777 {
-		return errors.New("bad umask value")
-	}
-
-	_ = syscall.Umask(int(mask))
-	return nil
 }
 
 func copyStdin() (*os.File, error) {
