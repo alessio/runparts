@@ -21,7 +21,7 @@ run_test_case() {
 
   rm -f ${gotStdout} ${gotStderr}
   echo -n -e "[${name}] ${runparts} $(<${args}) ${scripts} 1>${gotStdout} 2>${gotStderr} " >&2
-  ${runparts} $(<${args}) ${scripts} 1>${gotStdout} 2>${gotStderr}
+  ${runparts} $(<${args}) ${scripts} 1>${gotStdout} 2>${gotStderr} <AUTHORS
   [ $? = $(<${wantExit}) ] || fail exitCode
   diff -u ${wantStdout} ${gotStdout} || fail stdout
   diff -u ${wantStderr} ${gotStderr} || fail stderr
