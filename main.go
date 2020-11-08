@@ -313,8 +313,10 @@ func copyStdin() (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create temporary file: %v", err)
 	}
-	if _, err := io.Copy(stdinCopy, os.Stdin); err != nil {
+
+	if _, err := io.Copy(tempfile, os.Stdin); err != nil {
 		return tempfile, fmt.Errorf("couldn't copy stdin: %v", err)
 	}
+
 	return tempfile, nil
 }
