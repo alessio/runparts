@@ -111,13 +111,13 @@ func validateArgs() {
 	case filenameRegex != "":
 		regex, err := regexp.Compile(filenameRegex)
 		if err != nil {
-			log.Fatal("failed to compile regular expression: %v", err)
+			log.Fatalf("failed to compile regular expression: %v", err)
 		}
 		regexes = []*regexp.Regexp{regex}
 	case lsbsysinitMode:
 		regexes = []*regexp.Regexp{
 			regexp.MustCompile("^_?([a-z0-9_.]+-)+[a-z0-9]+$"),
-			regexp.MustCompile("^[a-z0-9-].*\\.dpkg-(old|dist|new|tmp)$"),
+			regexp.MustCompile(`^[a-z0-9-].*\.dpkg-(old|dist|new|tmp)$`),
 			regexp.MustCompile("^[a-z0-9][a-z0-9-]*$"),
 		}
 	default:
@@ -313,8 +313,10 @@ func copyStdin() (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create temporary file: %v", err)
 	}
-	if _, err := io.Copy(stdinCopy, os.Stdin); err != nil {
+
+	if _, err := io.Copy(tempfile, os.Stdin); err != nil {
 		return tempfile, fmt.Errorf("couldn't copy stdin: %v", err)
 	}
+
 	return tempfile, nil
 }
