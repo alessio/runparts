@@ -111,13 +111,13 @@ func validateArgs() {
 	case filenameRegex != "":
 		regex, err := regexp.Compile(filenameRegex)
 		if err != nil {
-			log.Fatal("failed to compile regular expression: %v", err)
+			log.Fatalf("failed to compile regular expression: %v", err)
 		}
 		regexes = []*regexp.Regexp{regex}
 	case lsbsysinitMode:
 		regexes = []*regexp.Regexp{
 			regexp.MustCompile("^_?([a-z0-9_.]+-)+[a-z0-9]+$"),
-			regexp.MustCompile("^[a-z0-9-].*\\.dpkg-(old|dist|new|tmp)$"),
+			regexp.MustCompile(`^[a-z0-9-].*\.dpkg-(old|dist|new|tmp)$`),
 			regexp.MustCompile("^[a-z0-9][a-z0-9-]*$"),
 		}
 	default:
