@@ -17,3 +17,5 @@
 /.idea
 /runparts
 testdata/**/gotStd*
+
+dist/
