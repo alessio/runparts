@@ -3,9 +3,9 @@
 all: runparts check
 
 runparts: generate
-	go build ./...
+	go build
 
-check: runparts testdata run-tests.sh clean-testdata
+check: runparts backup-testdata run-tests.sh
 	./run-tests.sh ./runparts testdata
 
 generate: mod-tidy
@@ -14,11 +14,15 @@ generate: mod-tidy
 mod-tidy: go.mod
 	go mod tidy
 
-distclean: clean clean-testdata
+distclean: clean restore-testdata
 clean:
-	rm -f runparts
+	rm -fv runparts
 
-clean-testdata:
-	find ./testdata/ -name 'gotStd*' -delete
+backup-testdata: testdata
+	cp -a testdata backup-testdata
 
-.PHONY: all check clean distclean clean-testdata runparts mod-tidy generate
+restore-testdata: backup-testdata
+	rm -rfv testdata
+	mv -v backup-testdata testdata
+
+.PHONY: all check clean distclean runparts mod-tidy generate
