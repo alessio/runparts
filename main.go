@@ -15,6 +15,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/alessio/runparts/internal/version"
+
 	flag "github.com/spf13/pflag"
 
 	"golang.org/x/sys/unix"
@@ -71,7 +73,7 @@ func main() {
 	}
 
 	if versionMode {
-		version()
+		printVersion()
 		return
 	}
 
@@ -93,9 +95,9 @@ func usage() {
 	flag.PrintDefaults()
 }
 
-func version() {
-	fmt.Fprintln(os.Stderr, "alessio's runparts program, version 1.0.0")
-	fmt.Fprintln(os.Stderr, "Copyright (C) 2020 Alessio Treglia <alessio@debian.org>")
+func printVersion() {
+	fmt.Fprintln(os.Stderr, "alessio's runparts program, version", version.Version)
+	fmt.Fprintln(os.Stderr, "Copyright (C) 2020-2023 Alessio Treglia <alessio@debian.org>")
 }
 
 func validateArgs() {

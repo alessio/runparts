@@ -19,3 +19,5 @@
 testdata/**/gotStd*
 
 dist/
+
+.DS_Store
