@@ -15,7 +15,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/alessio/runparts/internal/version"
+	"al.essio.dev/cmd/runparts/internal/version"
 
 	flag "github.com/spf13/pflag"
 

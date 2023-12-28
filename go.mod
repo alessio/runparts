@@ -1,4 +1,4 @@
-module github.com/alessio/runparts
+module al.essio.dev/cmd/runparts
 
 go 1.21
 

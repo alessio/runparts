@@ -18,5 +18,5 @@ tested on Windows systems.
 Just
 
 ```
-go get github.com/alessio/runparts
+go get al.essio.dev/cmd/runparts
 ```
