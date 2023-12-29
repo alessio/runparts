@@ -18,5 +18,5 @@ tested on Windows systems.
 Just
 
 ```
-go get al.essio.dev/cmd/runparts
+go install al.essio.dev/cmd/runparts@latest
 ```
