@@ -16,7 +16,7 @@ import (
 
 	"al.essio.dev/cmd/runparts/internal/version"
 
-	flag "github.com/spf13/pflag"
+	flag "github.com/hitbros/pflag"
 
 	"golang.org/x/sys/unix"
 )
@@ -40,10 +40,14 @@ var (
 	regexes    []*regexp.Regexp
 	scriptArgs []string
 	stdinCopy  *os.File
+
+	binBasename = ""
 )
 
 func init() {
-	flag.BoolVar(&listMode, "list", false, "print names of all valid files (can not be used with -test)")
+	binBasename = filepath.Base(os.Args[0])
+
+	flag.BoolVar(&listMode, "list", false, "print names of all valid files (can not be used with --test)")
 	flag.BoolVar(&testMode, "test", false, "print script names which would run, but don't run them.")
 	flag.BoolVar(&reportMode, "report", false, "print script names if they produce output.")
 	flag.BoolVar(&reverseMode, "reverse", false, "reverse the scripts' execution order.")
@@ -53,16 +57,18 @@ func init() {
 	flag.BoolVarP(&versionMode, "version", "V", false, "output version information and exit.")
 	flag.StringSliceVarP(&scriptArgs, "arg", "a", []string{}, "pass ARGUMENT to scripts, use once for each argument.")
 	flag.BoolVarP(&helpMode, "help", "h", false, "display this help and exit.")
-	flag.StringVarP(&umask, "umask", "u", defaultUmask, "sets umask to UMASK (octal), default is 022.")
+	flag.StringVarP(&umask, "umask", "u", defaultUmask, "sets umask to UMASK (octal).")
 	flag.StringVar(&filenameRegex, "regex", "", "validate filenames based on POSIX ERE pattern PATTERN.")
 	flag.BoolVar(&lsbsysinitMode, "lsbsysinit", false, "validate filenames based on LSB sysinit specs.")
 	flag.Usage = usage
 	flag.ErrHelp = nil
+
+	flag.CommandLine.SetOutput(os.Stderr)
 }
 
 func main() {
 	log.SetFlags(0)
-	log.SetPrefix("runparts: ")
+	log.SetPrefix(fmt.Sprintf("%s: ", binBasename))
 	log.SetOutput(os.Stderr)
 	flag.Parse()
 
@@ -90,13 +96,13 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "Usage: run-parts [OPTION]... DIRECTORY")
-	flag.PrintDefaults()
+	fmt.Printf("Usage: %s [OPTION]... DIRECTORY\n", binBasename)
+	fmt.Print(flag.CommandLine.FlagUsages())
 }
 
 func printVersion() {
-	fmt.Fprintln(os.Stderr, "alessio's runparts program, version", version.Version)
-	fmt.Fprintln(os.Stderr, "Copyright (C) 2020-2023 Alessio Treglia <alessio@debian.org>")
+	fmt.Println("alessio's runparts program, version", version.Version)
+	fmt.Println("Copyright (C) 2020-2024 Alessio Treglia <alessio@debian.org>")
 }
 
 func validateArgs() {
