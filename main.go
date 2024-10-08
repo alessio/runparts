@@ -170,7 +170,11 @@ func runParts(dirname string, filenames []string, scriptArgs []string,
 	if stdinMode {
 		stdinCopy, err = copyStdin()
 		if stdinCopy != nil {
-			defer os.Remove(stdinCopy.Name())
+			defer func() {
+				if err := os.Remove(stdinCopy.Name()); err != nil {
+					log.Println(fmt.Errorf("couldn't remove file %q: %w", stdinCopy.Name(), err))
+				}
+			}()
 		}
 		if err != nil {
 			return err
@@ -224,10 +228,10 @@ func runParts(dirname string, filenames []string, scriptArgs []string,
 				} else {
 					err = runPart(filename, os.Stdin, scriptArgs)
 				}
+
 				if err != nil && exitOnErrorMode {
 					return formatExitError(filename, err)
-				}
-				if err != nil {
+				} else if err != nil {
 					log.Println(formatExitError(filename, err))
 				}
 			}
