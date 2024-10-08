@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -127,8 +126,8 @@ func validateArgs() {
 	}
 }
 
-func listDirectory(dirname string, reverseOrder bool) ([]string, error) {
-	f, err := os.Open(dirname)
+func listDirectory(targetDir string, reverseOrder bool) ([]string, error) {
+	f, err := os.Open(targetDir)
 	if err != nil {
 		return nil, err
 	}
@@ -268,12 +267,12 @@ func runPart(filename string, input io.Reader, args []string) error {
 		return err
 	}
 
-	errSlurp, err := ioutil.ReadAll(stderr)
+	errSlurp, err := io.ReadAll(stderr)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	outSlurp, err := ioutil.ReadAll(stdout)
+	outSlurp, err := io.ReadAll(stdout)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -311,14 +310,14 @@ func formatExitError(filename string, err error) error {
 }
 
 func copyStdin() (*os.File, error) {
-	tempfile, err := ioutil.TempFile("", "")
+	tmp, err := os.CreateTemp("", "")
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create temporary file: %v", err)
 	}
 
-	if _, err := io.Copy(tempfile, os.Stdin); err != nil {
-		return tempfile, fmt.Errorf("couldn't copy stdin: %v", err)
+	if _, err := io.Copy(tmp, os.Stdin); err != nil {
+		return tmp, fmt.Errorf("couldn't copy stdin: %v", err)
 	}
 
-	return tempfile, nil
+	return tmp, nil
 }
