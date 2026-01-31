@@ -21,24 +21,23 @@ jobs:
       with:
         fetch-depth: 0
         fetch-tags: true
-
-    - name: Set up Go
-      uses: actions/setup-go@v6
+    - uses: actions/setup-go@v6
       with:
         go-version: 'stable'
+    - run: go generate ./...
+    - run: go build
+    - run: ./runparts -v
+    - run: go test -v -race -benchmem ./...
+    - run: go mod verify
 
-    - name: Run go generate
-      run: go generate ./internal/...
-
-    - name: Build
-      run: go build -v ./...
-
-    - name: Test
-      run: go test -v ./...
-
-#    - name: Test
-#      run: make check
-
-    - name: Test run
-      run: ./runparts -V
-
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+    - uses: actions/setup-go@v6
+      with:
+        go-version: 'stable'
+    - run: make test
