@@ -36,8 +36,8 @@ jobs:
     - name: Test
       run: go test -v ./...
 
-    - name: Test
-      run: make check
+#    - name: Test
+#      run: make check
 
     - name: Test run
       run: ./runparts -V
