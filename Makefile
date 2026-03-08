@@ -5,8 +5,8 @@ all: runparts check
 runparts: generate
 	go build
 
-check: runparts backup-testdata run-tests.sh
-	./run-tests.sh ./runparts testdata
+check: runparts
+	go test -race ./...
 
 generate: mod-tidy
 	go generate ./internal/...
@@ -14,15 +14,9 @@ generate: mod-tidy
 mod-tidy: go.mod
 	go mod tidy
 
-distclean: clean restore-testdata
+distclean: clean
 clean:
 	rm -fv runparts
-
-backup-testdata: testdata
-	cp -a testdata backup-testdata
-
-restore-testdata: backup-testdata
-	rm -rfv testdata
-	mv -v backup-testdata testdata
+	echo "v0.0.0-UNKNOWN" > ./internal/version/version.txt
 
 .PHONY: all check clean distclean runparts mod-tidy generate
