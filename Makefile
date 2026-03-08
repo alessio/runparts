@@ -17,6 +17,7 @@ mod-tidy: go.mod
 distclean: clean restore-testdata
 clean:
 	rm -fv runparts
+	echo "v0.0.0-UNKNOWN" > ./internal/version/version.txt
 
 backup-testdata: testdata
 	cp -a testdata backup-testdata

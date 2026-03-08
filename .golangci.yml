@@ -6,31 +6,25 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - deadcode
     - depguard
     - dogsled
     - goconst
     - gocritic
     - gofmt
     - goimports
-    - golint
+    - revive
     - gosec
     - gosimple
     - govet
     - ineffassign
-    - interfacer
-    - maligned
     - misspell
     - nakedret
     - prealloc
-    - scopelint
     - staticcheck
-    - structcheck
     - stylecheck
     - typecheck
     - unconvert
     - unused
-    - misspell
 
 issues:
   exclude-rules:
@@ -39,10 +33,10 @@ issues:
         - gosec
     - text: "comment on exported var"
       linters:
-        - golint
+        - revive
     - text: "don't use an underscore in package name"
       linters:
-        - golint
+        - revive
     - text: "ST1003:"
       linters:
         - stylecheck
@@ -55,6 +49,3 @@ issues:
 linters-settings:
   dogsled:
     max-blank-identifiers: 3
-  maligned:
-    # print struct with more effective memory layout or not, false by default
-    suggest-new: true

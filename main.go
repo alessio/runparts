@@ -39,7 +39,6 @@ var (
 
 	regexes    []*regexp.Regexp
 	scriptArgs []string
-	stdinCopy  *os.File
 
 	binBasename = ""
 )
@@ -90,7 +89,7 @@ func main() {
 	}
 
 	setUmask(umask)
-	if err := runParts(dirname, filenames, scriptArgs, isValidName(regexes), testMode, listMode, verboseMode, exitOnErrorMode, stdinMode); err != nil {
+	if err := runParts(dirname, filenames, scriptArgs, isValidName(regexes), testMode, listMode, verboseMode, exitOnErrorMode, stdinMode, reportMode); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -101,8 +100,8 @@ func usage() {
 }
 
 func printVersion() {
-	fmt.Println("alessio's runparts program, version", version.Version)
-	fmt.Println("Copyright (C) 2020-2024 Alessio Treglia <alessio@debian.org>")
+	fmt.Println("alessio's runparts program, version", version.Version())
+	fmt.Println("Copyright (C) 2020-2026 Alessio Treglia <alessio@debian.org>")
 }
 
 func validateArgs() {
@@ -137,6 +136,7 @@ func listDirectory(targetDir string, reverseOrder bool) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
 	filenames, err := f.Readdirnames(0)
 	if err != nil {
@@ -166,13 +166,16 @@ func setUmask(s string) {
 
 func runParts(dirname string, filenames []string, scriptArgs []string,
 	isValidNameFunc func(string) bool,
-	testMode, listMode, verboseMode, exitOnErrorMode, stdinMode bool) error {
+	testMode, listMode, verboseMode, exitOnErrorMode, stdinMode, reportMode bool) error {
 
 	if len(filenames) == 0 {
 		return nil
 	}
 
-	var err error
+	var (
+		stdinCopy *os.File
+		err       error
+	)
 	if stdinMode {
 		stdinCopy, err = copyStdin()
 		if stdinCopy != nil {
@@ -199,6 +202,7 @@ func runParts(dirname string, filenames []string, scriptArgs []string,
 				return err2
 			}
 			log.Print(err2.Error())
+			continue
 		}
 
 		mode := fileinfo.Mode()
@@ -229,10 +233,12 @@ func runParts(dirname string, filenames []string, scriptArgs []string,
 
 				var err error
 				if stdinMode {
-					stdinCopy.Seek(0, 0)
-					err = runPart(filename, stdinCopy, scriptArgs)
+					if _, err := stdinCopy.Seek(0, 0); err != nil {
+						return err
+					}
+					err = runPart(filename, stdinCopy, scriptArgs, reportMode)
 				} else {
-					err = runPart(filename, os.Stdin, scriptArgs)
+					err = runPart(filename, os.Stdin, scriptArgs, reportMode)
 				}
 
 				if err != nil && exitOnErrorMode {
@@ -242,34 +248,32 @@ func runParts(dirname string, filenames []string, scriptArgs []string,
 				}
 			}
 			continue
-		} else if err := unix.Access(filename, unix.R_OK); err == nil && listMode {
-			fmt.Println(filename)
+		} else if listMode {
+			if err := unix.Access(filename, unix.R_OK); err == nil {
+				fmt.Println(filename)
+			}
+		} else {
+			fi, err := os.Lstat(filename)
+			if err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("component %s is a broken symbolic link", filename)
+			}
 		}
-
-		if err := unix.Access(filename, unix.R_OK); err != nil && listMode {
-			fmt.Println(filename)
-		} else if mode&os.ModeSymlink != 0 && !listMode {
-			return fmt.Errorf("component %s is a broken symbolic link", filename)
-		}
-
-		continue
-
 	}
 
 	return nil
 }
 
-func runPart(filename string, input io.Reader, args []string) error {
+func runPart(filename string, input io.Reader, args []string, reportMode bool) error {
 	cmd := exec.Command(filename, args...)
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("stderr pipe: %w", err)
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("stdout pipe: %w", err)
 	}
 
 	cmd.Stdin = input
@@ -279,12 +283,12 @@ func runPart(filename string, input io.Reader, args []string) error {
 
 	errSlurp, err := io.ReadAll(stderr)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("reading stderr: %w", err)
 	}
 
 	outSlurp, err := io.ReadAll(stdout)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("reading stdout: %w", err)
 	}
 
 	if reportMode && (len(errSlurp) != 0 || len(outSlurp) != 0) {
@@ -312,8 +316,7 @@ func isValidName(exprs []*regexp.Regexp) func(name string) bool {
 }
 
 func formatExitError(filename string, err error) error {
-	var eerr *exec.ExitError
-	if errors.As(err, &eerr) {
+	if eerr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return fmt.Errorf("%s exited with return code %d", filename, eerr.ExitCode())
 	}
 	return fmt.Errorf("failed to exec %s: %s", filename, err.Error())
