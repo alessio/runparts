@@ -1,4 +1,4 @@
 github.com/hitbros/pflag v1.0.6-0.20241008214623-0d6423123106 h1:5AgjwuLGa5wjHVSLnUWq1ctHvTFmnIl3wieiLDdqUDs=
 github.com/hitbros/pflag v1.0.6-0.20241008214623-0d6423123106/go.mod h1:2E2XTJ+Jx82I5LkxXGZ0kKCbJWov2K47jWUzwOZqI2c=
-golang.org/x/sys v0.45.0 h1:dO4czNzziLiiXplLQgBCEpCvXQ3dnkn0SdaZSYdQ+FY=
-golang.org/x/sys v0.45.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
+golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
+golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
