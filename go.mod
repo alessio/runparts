@@ -1,6 +1,6 @@
 module al.essio.dev/cmd/runparts
 
-go 1.26
+go 1.27
 
 require (
 	github.com/hitbros/pflag v1.0.6-0.20241008214623-0d6423123106
