@@ -1,6 +1,7 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/alessio/runparts)](https://goreportcard.com/report/github.com/alessio/runparts)
+[![Go](https://github.com/alessio/runparts/actions/workflows/go.yml/badge.svg)](https://github.com/alessio/runparts/actions/workflows/go.yml)
 [![license](https://img.shields.io/github/license/alessio/runparts.svg)](https://github.com/alessio/runparts/blob/master/LICENSE)
-[![LoC](https://tokei.rs/b1/github/alessio/runparts)](https://github.com/alessio/runparts)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/alessio/runparts)](https://github.com/alessio/runparts/releases)
+
 
 # runparts
 Run scripts or programs in a directory.
